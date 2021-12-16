@@ -221,6 +221,30 @@ let execute_dynamic_function = async ({ environment, code }) => {
     return result
 }
 
+let ____ARGGGG_FUNCTION_TO_RUN_INSIDE_SCRIPT = {}
+// @ts-ignore
+window.____ARGGGG_FUNCTION_TO_RUN_INSIDE_SCRIPT = ____ARGGGG_FUNCTION_TO_RUN_INSIDE_SCRIPT
+
+/**
+ * @param {HTMLOrSVGScriptElement} script_element
+ * @param {() => any} fn
+ */
+let execute_inside_script_tag_that_replace = async (script_element, fn) => {
+    let id = Math.random()
+    let new_script_tag = document.createElement("script")
+
+    for (let attr of script_element.attributes) {
+        new_script_tag.attributes.setNamedItem(attr.cloneNode(true))
+    }
+
+    ____ARGGGG_FUNCTION_TO_RUN_INSIDE_SCRIPT[id] = { fn: fn }
+    new_script_tag.textContent = `window.____ARGGGG_FUNCTION_TO_RUN_INSIDE_SCRIPT[${id}].result = window.____ARGGGG_FUNCTION_TO_RUN_INSIDE_SCRIPT[${id}].fn()`
+    script_element.parentNode.replaceChild(new_script_tag, script_element)
+    let result = await ____ARGGGG_FUNCTION_TO_RUN_INSIDE_SCRIPT[id].result
+    delete ____ARGGGG_FUNCTION_TO_RUN_INSIDE_SCRIPT[id]
+    return { node: new_script_tag, result: result }
+}
+
 const is_displayable = (result) => result instanceof Element && result.nodeType === Node.ELEMENT_NODE
 
 /**
@@ -282,16 +306,19 @@ const execute_scripttags = async ({ root_node, script_nodes, previous_results_ma
                     }
 
                     const cell = root_node.closest("pluto-cell")
-                    let result = await execute_dynamic_function({
-                        environment: {
-                            this: script_id ? old_result : window,
-                            currentScript: node,
-                            invalidation: invalidation,
-                            getPublishedObject: (id) => cell.getPublishedObject(id),
-                            ...observablehq_for_cells,
-                        },
-                        code: node.innerText,
+                    let { node: new_node, result } = await execute_inside_script_tag_that_replace(node, async () => {
+                        return await execute_dynamic_function({
+                            environment: {
+                                this: script_id ? old_result : window,
+                                currentScript: node,
+                                invalidation: invalidation,
+                                getPublishedObject: (id) => cell.getPublishedObject(id),
+                                ...observablehq_for_cells,
+                            },
+                            code: node.innerText,
+                        })
                     })
+
                     // Save result for next run
                     if (script_id != null) {
                         results_map.set(script_id, result)
@@ -302,7 +329,7 @@ const execute_scripttags = async ({ root_node, script_nodes, previous_results_ma
                             old_result.remove()
                         }
                         if (is_displayable(result)) {
-                            node.parentElement.insertBefore(result, node)
+                            new_node.parentElement.insertBefore(result, new_node)
                         }
                     }
                 }
