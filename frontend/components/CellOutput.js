@@ -310,7 +310,7 @@ const execute_scripttags = async ({ root_node, script_nodes, previous_results_ma
                         return await execute_dynamic_function({
                             environment: {
                                 this: script_id ? old_result : window,
-                                currentScript: node,
+                                currentScript: document.currentScript,
                                 invalidation: invalidation,
                                 getPublishedObject: (id) => cell.getPublishedObject(id),
                                 ...observablehq_for_cells,
